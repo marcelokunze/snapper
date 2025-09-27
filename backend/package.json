@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "concurrently \"ts-node mcp-server/index.ts\" \"ts-node indexer/listener.ts\""
+    "dev": "concurrently \"tsx mcp-server/index.ts\" \"tsx indexer/listener.ts\""
   },
   "keywords": [],
   "author": "",
@@ -17,7 +17,7 @@
     "dotenv": "^17.2.2",
     "ethers": "^6.15.0",
     "express": "^5.1.0",
-    "ts-node": "^10.9.2",
+    "tsx": "^4.19.2",
     "typescript": "^5.9.2",
     "viem": "^2.37.8"
   },

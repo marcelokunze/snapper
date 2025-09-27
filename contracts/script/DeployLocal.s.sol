@@ -15,7 +15,7 @@ import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
 
 import {PolicyController} from "../src/PolicyController.sol";
 import {AdaptiveFeeHook} from "../src/AdaptiveFeeHook.sol";
-import {CREATE2_DEPLOYER} from "./base/Constants.sol";
+import {HookDeployer} from "../src/HookDeployer.sol";
 import {MockToken} from "../src/MockToken.sol";
 
 contract DeployLocal is Script {
@@ -52,17 +52,21 @@ contract DeployLocal is Script {
         });
 
         // 4) Mine a CREATE2 salt for AdaptiveFeeHook to embed flags
+        // Match AdaptiveFeeHook.getHookPermissions(): beforeSwap=true, afterSwap=true
         uint160 flags = uint160(
-            Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG | Hooks.BEFORE_SWAP_RETURNS_DELTA_FLAG
+            Hooks.BEFORE_SWAP_FLAG | Hooks.AFTER_SWAP_FLAG
         );
 
         bytes memory ctorArgs = abi.encode(IPoolManager(manager), pc);
+        // Deploy a stable on-chain deployer and mine a salt against its address
+        HookDeployer hd = new HookDeployer();
         (address mined, bytes32 salt) =
-            HookMiner.find(CREATE2_DEPLOYER, flags, type(AdaptiveFeeHook).creationCode, ctorArgs);
+            HookMiner.find(address(hd), flags, type(AdaptiveFeeHook).creationCode, ctorArgs);
 
-        // 5) Deploy the hook at the mined address
-        AdaptiveFeeHook hook = new AdaptiveFeeHook{salt: salt}(IPoolManager(manager), pc);
-        require(address(hook) == mined, "hook address mismatch");
+        // 5) Deploy the hook at the mined address via the deployer
+        address hookAddr = hd.deployAdaptiveFeeHook(salt, IPoolManager(manager), pc);
+        require(hookAddr == mined, "hook address mismatch");
+        AdaptiveFeeHook hook = AdaptiveFeeHook(payable(hookAddr));
 
         // 6) Initialize a dynamic-fee pool at 1:1 price with tickSpacing 60
         PoolKey memory key = PoolKey({

@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 
-import { getPoolState, simulateSwap, buildTx, updatePolicy } from './tools.js'
+import { getPoolState, simulateSwap, buildTx, updatePolicy } from './tools.ts'
 
 const app = express()
 const PORT = parseInt(process.env.PORT || '4000', 10)
