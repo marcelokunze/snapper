@@ -13,8 +13,8 @@ app.use(
 )
 app.use(express.json())
 
-// GET /mcp/getPoolState?pair=TOKEN0-TOKEN1
-app.get('/mcp/getPoolState', async (req, res) => {
+// GET /api/getPoolState?pair=TOKEN0-TOKEN1
+app.get('/api/getPoolState', async (req, res) => {
   try {
     const pair = (req.query.pair as string) || ''
     if (!pair) return res.status(400).json({ error: 'pair is required' })
@@ -26,9 +26,8 @@ app.get('/mcp/getPoolState', async (req, res) => {
   }
 })
 
-// POST /mcp/simulateSwap
-// { amountIn, tokenIn, tokenOut, slippageBps }
-app.post('/mcp/simulateSwap', async (req, res) => {
+// POST /api/simulateSwap
+app.post('/api/simulateSwap', async (req, res) => {
   try {
     const { amountIn, tokenIn, tokenOut, slippageBps } = req.body || {}
     if (!amountIn || !tokenIn || !tokenOut)
@@ -41,9 +40,8 @@ app.post('/mcp/simulateSwap', async (req, res) => {
   }
 })
 
-// POST /mcp/buildTx
-// { amountIn, tokenIn, tokenOut, minOut, deadline, recipient }
-app.post('/mcp/buildTx', async (req, res) => {
+// POST /api/buildTx
+app.post('/api/buildTx', async (req, res) => {
   try {
     const { amountIn, tokenIn, tokenOut, minOut, deadline, recipient } = req.body || {}
     if (!amountIn || !tokenIn || !tokenOut || !recipient)
@@ -56,10 +54,8 @@ app.post('/mcp/buildTx', async (req, res) => {
   }
 })
 
-// POST /mcp/updatePolicy
-// Optional admin-only demo: bump base fee by +5 bps
-// { bumpBaseBps?: number }
-app.post('/mcp/updatePolicy', async (req, res) => {
+// POST /api/updatePolicy
+app.post('/api/updatePolicy', async (req, res) => {
   try {
     const bumpBaseBps = typeof req.body?.bumpBaseBps === 'number' ? req.body.bumpBaseBps : 5
     const result = await updatePolicy({ bumpBaseBps })
@@ -69,9 +65,8 @@ app.post('/mcp/updatePolicy', async (req, res) => {
   }
 })
 
-// POST /mcp/buildApproveTx
-// { token: 'TOKEN0'|'TOKEN1', owner }
-app.post('/mcp/buildApproveTx', async (req, res) => {
+// POST /api/buildApproveTx
+app.post('/api/buildApproveTx', async (req, res) => {
   try {
     const { token, owner, amount } = req.body || {}
     if (!token || !owner) return res.status(400).json({ error: 'token, owner are required' })
@@ -82,9 +77,8 @@ app.post('/mcp/buildApproveTx', async (req, res) => {
   }
 })
 
-// POST /mcp/faucet
-// { token: 'TOKEN0'|'TOKEN1', to, amount? }
-app.post('/mcp/faucet', async (req, res) => {
+// POST /api/faucet
+app.post('/api/faucet', async (req, res) => {
   try {
     const { token, to, amount } = req.body || {}
     if (!token || !to) return res.status(400).json({ error: 'token, to are required' })
@@ -95,19 +89,18 @@ app.post('/mcp/faucet', async (req, res) => {
   }
 })
 
-app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
-  console.log(`MCP server up on port ${PORT}`)
-})
-
-// GET /mcp/addresses
-app.get('/mcp/addresses', (_req, res) => {
+// GET /api/addresses
+app.get('/api/addresses', (_req, res) => {
   try { res.json(getAddresses()) } catch (err: any) { res.status(500).json({ error: err?.message || 'addresses failed' }) }
 })
 
-// GET /mcp/diagnostics
-app.get('/mcp/diagnostics', async (_req, res) => {
+// GET /api/diagnostics
+app.get('/api/diagnostics', async (_req, res) => {
   try { res.json(await getDiagnostics()) } catch (err: any) { res.status(500).json({ error: err?.message || 'diagnostics failed' }) }
+})
+
+app.listen(PORT, () => {
+  console.log(`API server up on port ${PORT}`)
 })
 
 

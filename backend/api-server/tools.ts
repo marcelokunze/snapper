@@ -113,12 +113,12 @@ function bpsOf(amount: bigint, bps: number | bigint): bigint {
 // --- Exports ----------------------------------------------------------------
 
 export async function getPoolState(pair: string) {
-  const feeBps = (await publicClient.readContract({
+  const feeBps = Number(await publicClient.readContract({
     address: addresses.adaptiveFeeHook,
     abi: AdaptiveFeeHookAbi,
     functionName: 'currentFeeBps',
     args: [],
-  })) as number
+  }))
 
   return {
     pair,
@@ -141,12 +141,12 @@ type SimulateSwapParams = {
 export async function simulateSwap(params: SimulateSwapParams) {
   const amountIn = toBigInt(params.amountIn)
   const baselineBps = 30 // 0.30%
-  const hookBps = (await publicClient.readContract({
+  const hookBps = Number(await publicClient.readContract({
     address: addresses.adaptiveFeeHook,
     abi: AdaptiveFeeHookAbi,
     functionName: 'currentFeeBps',
     args: [],
-  })) as number
+  }))
 
   const baselineFee = bpsOf(amountIn, baselineBps)
   const hookFee = bpsOf(amountIn, hookBps)
@@ -218,36 +218,29 @@ export async function buildTx(params: BuildTxParams) {
 
   const amountIn = toBigInt(params.amountIn)
 
-  let to: `0x${string}`
-  let data: `0x${string}`
+  const to = addresses.swapper as `0x${string}`
+  const data = encodeFunctionData({
+    abi: SwapperAbi,
+    functionName: 'swapExactIn',
+    args: [key, zeroForOne, amountIn, params.recipient as `0x${string}`],
+  }) as `0x${string}`
   let gas: string = '0x0'
   try {
-    const { request } = await publicClient.simulateContract({
-      address: addresses.swapper!,
+    await publicClient.simulateContract({
+      address: to,
       abi: SwapperAbi,
       functionName: 'swapExactIn',
       args: [key, zeroForOne, amountIn, params.recipient as `0x${string}`],
       account: params.recipient as `0x${string}`,
     })
-    to = request.to!
-    data = request.data!
-    gas = request.gas?.toString() ?? '0x0'
-  } catch {
-    // Fallback: still return calldata so the wallet can send after user approves
-    to = addresses.swapper as `0x${string}`
-    data = encodeFunctionData({
-      abi: SwapperAbi,
-      functionName: 'swapExactIn',
-      args: [key, zeroForOne, amountIn, params.recipient as `0x${string}`],
-    }) as `0x${string}`
-  }
+  } catch {}
 
-  const hookBps = (await publicClient.readContract({
+  const hookBps = Number(await publicClient.readContract({
     address: addresses.adaptiveFeeHook,
     abi: AdaptiveFeeHookAbi,
     functionName: 'currentFeeBps',
     args: [],
-  })) as number
+  }))
 
   const amountInBIForSummary = toBigInt(params.amountIn)
   const fee = bpsOf(amountInBIForSummary, hookBps)
@@ -275,24 +268,12 @@ export async function buildApproveTx(params: { token: 'TOKEN0' | 'TOKEN1'; owner
   const amount = toBigInt(params.amount)
   // Approval needs to be for Swapper, which calls transferFrom(payer, manager, amount) inside unlockCallback
   const spender = addresses.swapper!
-  try {
-    const { request } = await publicClient.simulateContract({
-      address: tokenAddress,
-      abi: ERC20Abi,
-      functionName: 'approve',
-      args: [spender, amount],
-      account: params.owner,
-    })
-    return { to: request.to!, data: request.data!, value: '0x0', gas: request.gas?.toString() ?? '0x0' }
-  } catch {
-    // Fallback: return raw calldata so the wallet can submit the approval directly
-    const data = encodeFunctionData({
-      abi: ERC20Abi,
-      functionName: 'approve',
-      args: [spender, amount],
-    }) as `0x${string}`
-    return { to: tokenAddress, data, value: '0x0', gas: '0x0' }
-  }
+  const data = encodeFunctionData({
+    abi: ERC20Abi,
+    functionName: 'approve',
+    args: [spender, amount],
+  }) as `0x${string}`
+  return { to: tokenAddress, data, value: '0x0', gas: '0x0' }
 }
 
 export async function faucet(params: { token: 'TOKEN0' | 'TOKEN1'; to: `0x${string}`; amount?: string | number | bigint }) {
@@ -305,6 +286,7 @@ export async function faucet(params: { token: 'TOKEN0' | 'TOKEN1'; to: `0x${stri
     functionName: 'transfer',
     args: [params.to, amount],
     account,
+    chain: undefined,
   })
   return { txHash: hash }
 }
@@ -321,9 +303,9 @@ export async function updatePolicy(params: UpdatePolicyParams = {}) {
 
   // Read current parts (contract does not expose getPolicy in this build)
   const [base, max, slope] = await Promise.all([
-    publicClient.readContract({ address: addresses.policyController, abi: PolicyControllerAbi, functionName: 'baseFeeBps', args: [] }) as Promise<number>,
-    publicClient.readContract({ address: addresses.policyController, abi: PolicyControllerAbi, functionName: 'maxFeeBps', args: [] }) as Promise<number>,
-    publicClient.readContract({ address: addresses.policyController, abi: PolicyControllerAbi, functionName: 'volSlopeBpsPerBucket', args: [] }) as Promise<number>,
+    publicClient.readContract({ address: addresses.policyController, abi: PolicyControllerAbi, functionName: 'baseFeeBps', args: [] }).then(Number),
+    publicClient.readContract({ address: addresses.policyController, abi: PolicyControllerAbi, functionName: 'maxFeeBps', args: [] }).then(Number),
+    publicClient.readContract({ address: addresses.policyController, abi: PolicyControllerAbi, functionName: 'volSlopeBpsPerBucket', args: [] }).then(Number),
   ])
 
   const nextBase = Math.min(base + bump, max)
@@ -336,14 +318,15 @@ export async function updatePolicy(params: UpdatePolicyParams = {}) {
     args: [
       {
         // Order must be base, max, slope, cooldown, lastUpdated
-        baseFeeBps: BigInt(nextBase),
-        maxFeeBps: BigInt(max),
-        volSlopeBpsPerBucket: BigInt(slope),
-        cooldownSec: BigInt(cooldownSec),
-        lastUpdated: 0n,
+        baseFeeBps: Number(nextBase),
+        maxFeeBps: Number(max),
+        volSlopeBpsPerBucket: Number(slope),
+        cooldownSec: Number(cooldownSec),
+        lastUpdated: 0,
       },
     ],
     account,
+    chain: undefined,
   })
 
   return { txHash: hash, newBaseFeeBps: nextBase }

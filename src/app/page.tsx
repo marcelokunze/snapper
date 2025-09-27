@@ -40,7 +40,7 @@ export default function Home() {
   }, [chainId]);
 
   async function onSimulateSwap() {
-    const res = await fetch("http://localhost:4000/mcp/simulateSwap", {
+    const res = await fetch("http://localhost:4000/api/simulateSwap", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ amountIn: "100000000000000000", tokenIn: "TOKEN0", tokenOut: "TOKEN1", slippageBps: 50 }),
@@ -52,7 +52,7 @@ export default function Home() {
   }
 
   async function onBuildTx() {
-    const res = await fetch("http://localhost:4000/mcp/buildTx", {
+    const res = await fetch("http://localhost:4000/api/buildTx", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ amountIn: "100000000000000000", tokenIn: "TOKEN0", tokenOut: "TOKEN1", minOut: undefined, deadline: undefined, recipient: address }),
@@ -88,7 +88,7 @@ export default function Home() {
       return;
     }
     try {
-      const res = await fetch("http://localhost:4000/mcp/addresses");
+      const res = await fetch("http://localhost:4000/api/addresses");
       const addrs = await res.json();
       const token0 = addrs.token0 as `0x${string}`;
       const spender = addrs.swapper as `0x${string}`;
@@ -123,7 +123,7 @@ export default function Home() {
   // MCPay demo handlers removed
 
   async function onUpdatePolicy() {
-    const res = await fetch("http://localhost:4000/mcp/updatePolicy", { method: "POST" });
+    const res = await fetch("http://localhost:4000/api/updatePolicy", { method: "POST" });
     const data = await res.json();
     termRef.current?.push(`Policy update tx: ${JSON.stringify(data)}`, "🛠️");
   }
