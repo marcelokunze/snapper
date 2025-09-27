@@ -2,8 +2,10 @@
 
 import React, { useMemo, useRef, useState } from "react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import Image from "next/image";
 import { useAccount, useChainId, usePublicClient, useWalletClient } from "wagmi";
 import Terminal, { TerminalHandle } from "../components/Terminal";
+import ToolcallButton from "../components/ToolcallButton";
 
 type SimResult = {
   baseline: { out: string; feeBps: number };
@@ -69,7 +71,7 @@ export default function Home() {
       const hash = await walletClient.sendTransaction({
         to: buildTx.to,
         data: buildTx.data,
-        value: 0n,
+        value: BigInt(0),
       });
       termRef.current?.push(`Sent tx ${hash}`, "📤");
       const receipt = await publicClient!.waitForTransactionReceipt({ hash });
@@ -108,7 +110,7 @@ export default function Home() {
         abi: ERC20Abi,
         functionName: "approve",
         args: [spender, (BigInt(1) << BigInt(256)) - BigInt(1)],
-        account: address,
+        account: address as `0x${string}`,
       });
       termRef.current?.push(`Approve tx ${hash}`, "✅");
       const receipt = await publicClient!.waitForTransactionReceipt({ hash });
@@ -128,37 +130,23 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full px-6 py-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <ConnectButton />
-          <span className="text-xs px-2 py-1 rounded bg-neutral-800 text-neutral-200">{networkBadge}</span>
+          <Image src="/SNAPPER-logo.svg" alt="SNAPPER" width={200} height={32} />
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={onApproveToken0}
-            className="px-3 py-2 rounded bg-emerald-600 text-white text-sm"
-          >
-            Approve TOKEN0
-          </button>
-          <button
-            onClick={onSimulateSwap}
-            className="px-3 py-2 rounded bg-blue-600 text-white text-sm"
-          >
-            Simulate Swap
-          </button>
-          <button
-            onClick={onBuildTx}
-            className="px-3 py-2 rounded bg-indigo-600 text-white text-sm"
-          >
-            Build Tx
-          </button>
-          {/* MCPay button removed */}
-          <button
-            onClick={onUpdatePolicy}
-            className="px-3 py-2 rounded bg-amber-600 text-white text-sm"
-          >
-            Update Policy (Agent)
-          </button>
+          <span className="text-xs px-2 py-1 rounded bg-neutral-800 text-neutral-200">{networkBadge}</span>
+          <ConnectButton />
+        </div>
+      </div>
+
+      <div className="mb-4">
+        <div className="font-mono text-md text-zinc-200 mb-2">TOOLS</div>
+        <div className="flex items-center gap-3">
+          <ToolcallButton onClick={onApproveToken0}>Approve TOKEN0</ToolcallButton>
+          <ToolcallButton onClick={onSimulateSwap}>Simulate Swap</ToolcallButton>
+          <ToolcallButton onClick={onBuildTx}>Build Tx</ToolcallButton>
+          <ToolcallButton onClick={onUpdatePolicy}>Update Policy (Agent)</ToolcallButton>
         </div>
       </div>
 

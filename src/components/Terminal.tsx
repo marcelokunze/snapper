@@ -111,18 +111,17 @@ const Terminal = forwardRef<TerminalHandle, Props>(function Terminal(
   return (
     <div className={className} style={{ display: 'flex', flexDirection: 'column' }}>
       <div
+        className="bg-zinc-800 text-zinc-100"
         style={{
           ...containerStyle,
           border: 'none',
-          borderRadius: 8,
+          borderRadius: 4,
           padding: 12,
           overflowY: 'auto',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
           fontSize: 13,
           fontWeight: 500,
           lineHeight: 1.6,
-          background: '#0b0f14',
-          color: '#e6edf3',
         }}
       >
         {entries.map((e, i) => {
@@ -136,7 +135,7 @@ const Terminal = forwardRef<TerminalHandle, Props>(function Terminal(
               <span style={{ width: 22 }}>{e.emoji}</span>
               <div style={{ flex: 1 }}>
                 {e.isResult ? (
-                  <div style={{ background: '#0f151c', padding: 8, borderRadius: 6 }}>
+                  <div className="bg-zinc-700 rounded p-2">
                     <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.85, marginBottom: 4 }}>RESULT</div>
                     {content}
                   </div>
