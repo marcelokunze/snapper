@@ -76,6 +76,44 @@ export default function Home() {
     }
   }
 
+  async function onApproveToken0() {
+    if (!walletClient || !address) {
+      termRef.current?.push("Connect a wallet first", "⚠️");
+      return;
+    }
+    try {
+      const res = await fetch("http://localhost:4000/mcp/addresses");
+      const addrs = await res.json();
+      const token0 = addrs.token0 as `0x${string}`;
+      const spender = addrs.swapper as `0x${string}`;
+      const ERC20Abi = [
+        {
+          type: "function",
+          name: "approve",
+          stateMutability: "nonpayable",
+          inputs: [
+            { name: "spender", type: "address" },
+            { name: "amount", type: "uint256" },
+          ],
+          outputs: [{ name: "", type: "bool" }],
+        },
+      ] as const;
+
+      const hash = await walletClient.writeContract({
+        address: token0,
+        abi: ERC20Abi,
+        functionName: "approve",
+        args: [spender, (BigInt(1) << BigInt(256)) - BigInt(1)],
+        account: address,
+      });
+      termRef.current?.push(`Approve tx ${hash}`, "✅");
+      const receipt = await publicClient!.waitForTransactionReceipt({ hash });
+      termRef.current?.push(`Approve mined in block ${receipt.blockNumber}`, "⛏️");
+    } catch (err: any) {
+      termRef.current?.push(`Approve error: ${err?.message || String(err)}`, "⚠️");
+    }
+  }
+
   // MCPay demo handlers removed
 
   async function onUpdatePolicy() {
@@ -92,6 +130,12 @@ export default function Home() {
           <span className="text-xs px-2 py-1 rounded bg-neutral-800 text-neutral-200">{networkBadge}</span>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={onApproveToken0}
+            className="px-3 py-2 rounded bg-emerald-600 text-white text-sm"
+          >
+            Approve TOKEN0
+          </button>
           <button
             onClick={onSimulateSwap}
             className="px-3 py-2 rounded bg-blue-600 text-white text-sm"

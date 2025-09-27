@@ -17,6 +17,7 @@ import {PolicyController} from "../src/PolicyController.sol";
 import {AdaptiveFeeHook} from "../src/AdaptiveFeeHook.sol";
 import {HookDeployer} from "../src/HookDeployer.sol";
 import {MockToken} from "../src/MockToken.sol";
+import {Swapper} from "../src/Swapper.sol";
 
 contract DeployLocal is Script {
     using CurrencyLibrary for Currency;
@@ -96,13 +97,17 @@ contract DeployLocal is Script {
 
         router.modifyLiquidity(key, liq, new bytes(0));
 
-        // 9) Persist deployed addresses for the backend/indexer
+        // 9) Deploy minimal Swapper
+        Swapper swapper = new Swapper(manager);
+
+        // 10) Persist deployed addresses for the backend/indexer
         string memory root = "addresses";
         vm.serializeAddress(root, "token0", Currency.unwrap(currency0));
         vm.serializeAddress(root, "token1", Currency.unwrap(currency1));
         vm.serializeAddress(root, "poolManager", address(manager));
         vm.serializeAddress(root, "policyController", address(pc));
         vm.serializeAddress(root, "adaptiveFeeHook", address(hook));
+        vm.serializeAddress(root, "swapper", address(swapper));
         vm.serializeUint(root, "chainId", block.chainid);
         string memory out = vm.serializeString(root, "note", string(abi.encodePacked("tickSpacing=60, dynamic-fee")));
         vm.writeJson(out, "out/addresses.local.json");

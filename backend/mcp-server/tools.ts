@@ -2,7 +2,7 @@ import 'dotenv/config'
 import fs from 'fs'
 import path from 'path'
 
-import { createPublicClient, createWalletClient, http } from 'viem'
+import { createPublicClient, createWalletClient, encodeFunctionData, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
 // --- Env & addresses -------------------------------------------------------
@@ -16,6 +16,7 @@ type Addresses = {
   poolManager: `0x${string}`
   policyController: `0x${string}`
   adaptiveFeeHook: `0x${string}`
+  swapper?: `0x${string}`
   poolKey?: string
   chainId?: number
 }
@@ -36,6 +37,7 @@ const addresses = (() => {
       poolManager: '0x0000000000000000000000000000000000000000',
       policyController: '0x0000000000000000000000000000000000000000',
       adaptiveFeeHook: '0x0000000000000000000000000000000000000000',
+      swapper: '0x0000000000000000000000000000000000000000',
       chainId: 31337,
     } as Addresses
   }
@@ -44,6 +46,14 @@ const addresses = (() => {
 // --- Clients ----------------------------------------------------------------
 
 const publicClient = createPublicClient({ transport: http(RPC_URL) })
+function getWalletFromEnv() {
+  const pk = process.env.DEMO_PRIVKEY
+  if (!pk) throw new Error('DEMO_PRIVKEY not set')
+  const account = privateKeyToAccount(pk as `0x${string}`)
+  const wallet = createWalletClient({ account, transport: http(RPC_URL) })
+  return { wallet, account }
+}
+// We don't need wallet client for buildTx; the frontend wallet will sign and send
 
 // Minimal ABIs for calls we need
 const AdaptiveFeeHookAbi = [
@@ -164,11 +174,73 @@ type BuildTxParams = {
 }
 
 export async function buildTx(params: BuildTxParams) {
-  // POC: return a placeholder calldata targeting PoolManager (or your router)
-  // so the frontend can show a summary and prepare a wallet action.
-  const to = addresses.poolManager
-  const gas = '0x0'
-  const data = '0x'
+  // Build calldata to call Swapper.swapExactIn with proper PoolKey and direction
+  if (!addresses.swapper) throw new Error('Swapper address missing in addresses JSON')
+
+  // Minimal ABI for our Swapper contract
+  const SwapperAbi = [
+    {
+      type: 'function',
+      name: 'swapExactIn',
+      stateMutability: 'nonpayable',
+      inputs: [
+        {
+          name: 'key',
+          type: 'tuple',
+          components: [
+            { name: 'currency0', type: 'address' },
+            { name: 'currency1', type: 'address' },
+            { name: 'fee', type: 'uint24' },
+            { name: 'tickSpacing', type: 'int24' },
+            { name: 'hooks', type: 'address' },
+          ],
+        },
+        { name: 'zeroForOne', type: 'bool' },
+        { name: 'amountIn', type: 'uint256' },
+        { name: 'recipient', type: 'address' },
+      ],
+      outputs: [],
+    },
+  ] as const
+
+  // Our demo pool uses dynamic fee flag and tickSpacing 60 with the mined hook
+  const key = {
+    currency0: addresses.token0,
+    currency1: addresses.token1,
+    fee: 0x800000, // LPFeeLibrary.DYNAMIC_FEE_FLAG
+    tickSpacing: 60,
+    hooks: addresses.adaptiveFeeHook,
+  }
+
+  const tokenInIs0 = params.tokenIn === 'TOKEN0'
+  const tokenOutIs1 = params.tokenOut === 'TOKEN1'
+  const zeroForOne = tokenInIs0 && tokenOutIs1 ? true : false
+
+  const amountIn = toBigInt(params.amountIn)
+
+  let to: `0x${string}`
+  let data: `0x${string}`
+  let gas: string = '0x0'
+  try {
+    const { request } = await publicClient.simulateContract({
+      address: addresses.swapper!,
+      abi: SwapperAbi,
+      functionName: 'swapExactIn',
+      args: [key, zeroForOne, amountIn, params.recipient as `0x${string}`],
+      account: params.recipient as `0x${string}`,
+    })
+    to = request.to!
+    data = request.data!
+    gas = request.gas?.toString() ?? '0x0'
+  } catch {
+    // Fallback: still return calldata so the wallet can send after user approves
+    to = addresses.swapper as `0x${string}`
+    data = encodeFunctionData({
+      abi: SwapperAbi,
+      functionName: 'swapExactIn',
+      args: [key, zeroForOne, amountIn, params.recipient as `0x${string}`],
+    }) as `0x${string}`
+  }
 
   const hookBps = (await publicClient.readContract({
     address: addresses.adaptiveFeeHook,
@@ -177,18 +249,64 @@ export async function buildTx(params: BuildTxParams) {
     args: [],
   })) as number
 
-  const amountIn = toBigInt(params.amountIn)
-  const fee = bpsOf(amountIn, hookBps)
-  const estOut = (amountIn - fee).toString()
+  const amountInBIForSummary = toBigInt(params.amountIn)
+  const fee = bpsOf(amountInBIForSummary, hookBps)
+  const estOut = (amountInBIForSummary - fee).toString()
 
   const summary = {
     route: `${params.tokenIn} -> ${params.tokenOut}`,
-    amountIn: amountIn.toString(),
+    amountIn: amountInBIForSummary.toString(),
     estOut,
     feeBps: hookBps,
   }
 
   return { to, data, value: '0x0', gas, summary }
+}
+
+// --- Approvals & Faucet ------------------------------------------------------
+
+const ERC20Abi = [
+  { type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [ { name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' } ], outputs: [ { name: '', type: 'bool' } ] },
+  { type: 'function', name: 'transfer', stateMutability: 'nonpayable', inputs: [ { name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' } ], outputs: [ { name: '', type: 'bool' } ] },
+] as const
+
+export async function buildApproveTx(params: { token: 'TOKEN0' | 'TOKEN1'; owner: `0x${string}`; amount: string | number | bigint }) {
+  const tokenAddress = params.token === 'TOKEN0' ? addresses.token0 : addresses.token1
+  const amount = toBigInt(params.amount)
+  // Approval needs to be for Swapper, which calls transferFrom(payer, manager, amount) inside unlockCallback
+  const spender = addresses.swapper!
+  try {
+    const { request } = await publicClient.simulateContract({
+      address: tokenAddress,
+      abi: ERC20Abi,
+      functionName: 'approve',
+      args: [spender, amount],
+      account: params.owner,
+    })
+    return { to: request.to!, data: request.data!, value: '0x0', gas: request.gas?.toString() ?? '0x0' }
+  } catch {
+    // Fallback: return raw calldata so the wallet can submit the approval directly
+    const data = encodeFunctionData({
+      abi: ERC20Abi,
+      functionName: 'approve',
+      args: [spender, amount],
+    }) as `0x${string}`
+    return { to: tokenAddress, data, value: '0x0', gas: '0x0' }
+  }
+}
+
+export async function faucet(params: { token: 'TOKEN0' | 'TOKEN1'; to: `0x${string}`; amount?: string | number | bigint }) {
+  const tokenAddress = params.token === 'TOKEN0' ? addresses.token0 : addresses.token1
+  const amount = toBigInt(params.amount ?? '1000000000000000000') // 1 token default
+  const { wallet, account } = getWalletFromEnv()
+  const hash = await wallet.writeContract({
+    address: tokenAddress,
+    abi: ERC20Abi,
+    functionName: 'transfer',
+    args: [params.to, amount],
+    account,
+  })
+  return { txHash: hash }
 }
 
 type UpdatePolicyParams = { bumpBaseBps?: number }
@@ -229,6 +347,19 @@ export async function updatePolicy(params: UpdatePolicyParams = {}) {
   })
 
   return { txHash: hash, newBaseFeeBps: nextBase }
+}
+
+// --- Diagnostics -------------------------------------------------------------
+
+export function getAddresses() {
+  return addresses
+}
+
+export async function getDiagnostics() {
+  const chainId = await publicClient.getChainId()
+  const hookCode = await publicClient.getBytecode({ address: addresses.adaptiveFeeHook })
+  const swapperCode = addresses.swapper ? await publicClient.getBytecode({ address: addresses.swapper }) : null
+  return { chainId, addresses, hasHookCode: !!hookCode, hasSwapperCode: !!swapperCode }
 }
 
 
