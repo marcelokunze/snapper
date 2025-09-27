@@ -1,12 +1,12 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "MCP server, MCPay proxy, and indexer workspace.",
+  "description": "MCP server and indexer workspace.",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "concurrently \"ts-node mcp-server/index.ts\" \"ts-node mcpay-proxy/server.ts\" \"ts-node indexer/listener.ts\""
+    "dev": "concurrently \"ts-node mcp-server/index.ts\" \"ts-node indexer/listener.ts\""
   },
   "keywords": [],
   "author": "",

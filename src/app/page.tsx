@@ -31,8 +31,7 @@ export default function Home() {
   const [buildTx, setBuildTx] = useState<BuildTxResult | null>(null);
   const [showTxModal, setShowTxModal] = useState(false);
 
-  const [payModal, setPayModal] = useState<null | { price: string; payTo: string; memo: string; ttl: number }>(null);
-  const [premium, setPremium] = useState<any | null>(null);
+  // Removed MCPay demo UI
 
   const networkBadge = useMemo(() => {
     return `Chain ${chainId}`;
@@ -77,34 +76,7 @@ export default function Home() {
     }
   }
 
-  async function onRunPremium() {
-    const nonce = (globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)) as string;
-    const res = await fetch("http://localhost:4001/premium/simulate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nonce }),
-    });
-    if (res.status === 402) {
-      const data = await res.json();
-      setPayModal({ price: data.price, payTo: data.payTo, memo: data.memo, ttl: data.ttl });
-      termRef.current?.push(`Premium required: ${data.price}`, "💳");
-      return;
-    }
-    const enriched = await res.json();
-    setPremium(enriched);
-    termRef.current?.push("Premium simulation complete", "⭐");
-  }
-
-  async function onMarkPaid() {
-    if (!payModal) return;
-    await fetch("http://localhost:4001/webhook/paid", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nonce: payModal.memo }),
-    });
-    setPayModal(null);
-    await onRunPremium();
-  }
+  // MCPay demo handlers removed
 
   async function onUpdatePolicy() {
     const res = await fetch("http://localhost:4000/mcp/updatePolicy", { method: "POST" });
@@ -132,12 +104,7 @@ export default function Home() {
           >
             Build Tx
           </button>
-          <button
-            onClick={onRunPremium}
-            className="px-3 py-2 rounded bg-emerald-600 text-white text-sm"
-          >
-            Run Premium Simulation (MCPay)
-          </button>
+          {/* MCPay button removed */}
           <button
             onClick={onUpdatePolicy}
             className="px-3 py-2 rounded bg-amber-600 text-white text-sm"
@@ -152,10 +119,7 @@ export default function Home() {
           <div className="font-semibold mb-2">Simulate Result</div>
           <pre className="text-xs whitespace-pre-wrap">{sim ? JSON.stringify(sim, null, 2) : "No simulation yet"}</pre>
         </div>
-        <div className="border border-neutral-800 rounded p-4">
-          <div className="font-semibold mb-2">Premium Result</div>
-          <pre className="text-xs whitespace-pre-wrap">{premium ? JSON.stringify(premium, null, 2) : "No premium result yet"}</pre>
-        </div>
+        {/* MCPay panel removed */}
       </div>
 
       {showTxModal && buildTx && (
@@ -171,18 +135,7 @@ export default function Home() {
         </div>
       )}
 
-      {payModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-          <div className="bg-neutral-900 text-neutral-100 rounded p-4 w-[420px] max-w-[90vw]">
-            <div className="font-semibold mb-2">Payment Required</div>
-            <pre className="text-xs whitespace-pre-wrap mb-3">{JSON.stringify(payModal, null, 2)}</pre>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setPayModal(null)} className="px-3 py-2 rounded bg-neutral-700 text-white text-sm">Close</button>
-              <button onClick={onMarkPaid} className="px-3 py-2 rounded bg-emerald-600 text-white text-sm">Mark Paid</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MCPay modal removed */}
 
       <div className="mt-6">
         <Terminal ref={termRef} />

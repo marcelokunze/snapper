@@ -45,7 +45,7 @@ function formatTime(ts: number): string {
 }
 
 const Terminal = forwardRef<TerminalHandle, Props>(function Terminal(
-  { url = 'http://localhost:4000/events', height = 240, className },
+  { url = 'http://localhost:4002/events', height = 240, className },
   ref
 ) {
   const [entries, setEntries] = useState<TerminalEntry[]>([])
