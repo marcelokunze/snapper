@@ -130,7 +130,7 @@ const Terminal = forwardRef<TerminalHandle, Props>(function Terminal(
           borderRadius: 6,
           padding: 24,
           overflowY: 'auto',
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+          fontFamily: 'Geist Mono',
           fontSize: 13,
           fontWeight: 600,
           lineHeight: 1.6,
