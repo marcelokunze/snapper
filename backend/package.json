@@ -3,8 +3,10 @@
   "version": "1.0.0",
   "description": "MCP server, MCPay proxy, and indexer workspace.",
   "main": "index.js",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "concurrently \"ts-node mcp-server/index.ts\" \"ts-node mcpay-proxy/server.ts\" \"ts-node indexer/listener.ts\""
   },
   "keywords": [],
   "author": "",
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.3",
-    "@types/node": "^24.5.2"
+    "@types/node": "^24.5.2",
+    "@types/cors": "^2.8.17"
   }
 }
