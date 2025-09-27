@@ -14,10 +14,12 @@ type TerminalEntry = {
   emoji: string
   message: string
   raw?: unknown
+  isResult?: boolean
 }
 
 export type TerminalHandle = {
   push: (message: string, emoji?: string) => void
+  pushResult: (message: string, emoji?: string) => void
 }
 
 type Props = {
@@ -56,6 +58,12 @@ const Terminal = forwardRef<TerminalHandle, Props>(function Terminal(
       setEntries((prev) => [
         ...prev,
         { ts: Date.now(), emoji, message },
+      ])
+    },
+    pushResult: (message: string, emoji = '📦') => {
+      setEntries((prev) => [
+        ...prev,
+        { ts: Date.now(), emoji, message, isResult: true },
       ])
     },
   }))
@@ -105,23 +113,40 @@ const Terminal = forwardRef<TerminalHandle, Props>(function Terminal(
       <div
         style={{
           ...containerStyle,
-          border: '1px solid #333',
+          border: 'none',
           borderRadius: 8,
           padding: 12,
           overflowY: 'auto',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-          fontSize: 12,
+          fontSize: 13,
+          fontWeight: 500,
+          lineHeight: 1.6,
           background: '#0b0f14',
           color: '#e6edf3',
         }}
       >
-        {entries.map((e, i) => (
-          <div key={`${e.ts}-${i}`} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-            <span style={{ width: 22 }}>{e.emoji}</span>
-            <span style={{ opacity: 0.7 }}>{formatTime(e.ts)}</span>
-            <span style={{ wordBreak: 'break-word' }}>{e.message}</span>
-          </div>
-        ))}
+        {entries.map((e, i) => {
+          const content = (
+            <span style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{e.message}</span>
+          )
+          return (
+            <div key={`${e.ts}-${i}`} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 6 }}>
+              <span style={{ opacity: 0.7, paddingTop: 2, minWidth: 60 }}>{formatTime(e.ts)}</span>
+              <span style={{ opacity: 0.7, paddingTop: 2 }}>&gt;</span>
+              <span style={{ width: 22 }}>{e.emoji}</span>
+              <div style={{ flex: 1 }}>
+                {e.isResult ? (
+                  <div style={{ background: '#0f151c', padding: 8, borderRadius: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.85, marginBottom: 4 }}>RESULT</div>
+                    {content}
+                  </div>
+                ) : (
+                  content
+                )}
+              </div>
+            </div>
+          )
+        })}
         <div ref={bottomRef} />
       </div>
     </div>

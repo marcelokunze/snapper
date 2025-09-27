@@ -46,6 +46,7 @@ export default function Home() {
     const data = (await res.json()) as SimResult;
     setSim(data);
     termRef.current?.push("Simulated swap via MCP", "🧪");
+    termRef.current?.pushResult(JSON.stringify(data, null, 2), "🧪");
   }
 
   async function onBuildTx() {
@@ -57,6 +58,9 @@ export default function Home() {
     const data = (await res.json()) as BuildTxResult;
     setBuildTx(data);
     setShowTxModal(true);
+    const preview = data.summary ?? data;
+    termRef.current?.push("Built swap tx", "🧰");
+    termRef.current?.pushResult(JSON.stringify(preview, null, 2), "🧰");
   }
 
   async function onSendTx() {
@@ -158,13 +162,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="border border-neutral-800 rounded p-4">
-          <div className="font-semibold mb-2">Simulate Result</div>
-          <pre className="text-xs whitespace-pre-wrap">{sim ? JSON.stringify(sim, null, 2) : "No simulation yet"}</pre>
-        </div>
-        {/* MCPay panel removed */}
-      </div>
+      {/* Removed Simulate Result panel; results now appear in the terminal */}
 
       {showTxModal && buildTx && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
@@ -181,8 +179,8 @@ export default function Home() {
 
       {/* MCPay modal removed */}
 
-      <div className="mt-6">
-        <Terminal ref={termRef} />
+      <div className="fixed left-0 right-0 bottom-0 px-6 pb-6">
+        <Terminal ref={termRef} height="70vh" />
       </div>
     </div>
   );
