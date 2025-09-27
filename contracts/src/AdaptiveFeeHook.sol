@@ -1,81 +1,104 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.26;
 
-// Uniswap v4 core imports (types and hook interfaces)
-import {IHooks} from "@uniswap/v4-core/contracts/interfaces/IHooks.sol";
-import {IPoolManager} from "@uniswap/v4-core/contracts/interfaces/IPoolManager.sol";
-import {PoolKey} from "@uniswap/v4-core/contracts/types/PoolKey.sol";
-import {BalanceDelta} from "@uniswap/v4-core/contracts/types/BalanceDelta.sol";
-import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/contracts/types/BeforeSwapDelta.sol";
+import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {BeforeSwapDelta, BeforeSwapDeltaLibrary} from "@uniswap/v4-core/src/types/BeforeSwapDelta.sol";
+import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 
 import {PolicyController} from "./PolicyController.sol";
 
-/// @notice Adaptive fee hook that computes a dynamic fee per swap using a simple volatility bucket heuristic.
-/// The exact Uniswap v4 hook signatures are implemented to enable dynamic fee via beforeSwap.
-contract AdaptiveFeeHook is IHooks {
-  IPoolManager public immutable poolManager;
-  PolicyController public controller;
+/// @title AdaptiveFeeHook
+/// @notice A simple dynamic-fee Uniswap v4 hook. It computes a swap fee per call
+///         using a tiny “volatility bucket” heuristic and caps it by policy.
+/// @dev    Uniswap v4 expects fees in hundredths of a bip (1e-6). If your policy
+///         is in bps (1e-4), multiply by 100 to convert.
+contract AdaptiveFeeHook is BaseHook {
+    PolicyController public controller;
 
-  event PolicyUsed(uint16 feeBps, int8 volBucket);
+    event PolicyUsed(uint16 feeBps, int8 volBucket);
 
-  constructor(IPoolManager _pm, PolicyController _c) {
-    poolManager = _pm;
-    controller = _c;
-  }
+    constructor(IPoolManager _poolManager, PolicyController _controller) BaseHook(_poolManager) {
+        controller = _controller;
+    }
 
-  /// @dev Very cheap heuristic returning -1, 0, or +1 bucket based on timestamp.
-  function _bucketHeuristic() internal view returns (int8) {
-    return int8(int256(block.timestamp % 3)) - 1; // -1, 0, +1
-  }
+    // -------------------------
+    // Internal helpers
+    // -------------------------
 
-  /// @notice Compute the current fee in basis points, bounded by [0, maxFeeBps].
-  function currentFeeBps() public view returns (uint16) {
-    PolicyController.Policy memory p = controller.getPolicy();
-    int8 b = _bucketHeuristic();
+    /// @dev Very cheap heuristic returning -1, 0, or +1 based on timestamp.
+    function _bucketHeuristic() internal view returns (int8) {
+        // Results cycle every 3 seconds: -1, 0, +1
+        return int8(int256(block.timestamp % 3)) - 1;
+    }
 
-    int256 fee = int256(uint256(p.baseFeeBps)) + int256(p.volSlopeBpsPerBucket) * int256(b);
-    if (fee < 0) fee = 0;
-    if (fee > int256(uint256(p.maxFeeBps))) fee = int256(uint256(p.maxFeeBps));
-    return uint16(uint256(fee));
-  }
+    /// @notice Current fee in bps, bounded by policy caps.
+    function currentFeeBps() public view returns (uint16) {
+        uint16 base = controller.baseFeeBps();
+        int16 slope = controller.volSlopeBpsPerBucket();
+        uint16 maxF = controller.maxFeeBps();
 
-  // --------------------------------------------------------------------------------------------
-  // Uniswap v4 hook functions
-  // --------------------------------------------------------------------------------------------
+        int8 b = _bucketHeuristic();
+        int256 fee = int256(uint256(base)) + int256(slope) * int256(b);
 
-  /// @notice Called by PoolManager before a swap is executed. Returns the hook selector, a zero delta,
-  /// and a dynamic fee for the swap.
-  /// NOTE: The returned fee is in hundredths of a basis point per Uniswap v4 convention. We convert
-  /// from basis points by multiplying by 100. Adjust if your v4-core dependency uses a different scale.
-  function beforeSwap(
-    address,
-    PoolKey calldata,
-    IPoolManager.SwapParams calldata,
-    bytes calldata
-  ) external returns (bytes4, BeforeSwapDelta, uint24) {
-    uint16 feeBps = currentFeeBps();
+        if (fee < 0) fee = 0;
+        if (fee > int256(uint256(maxF))) fee = int256(uint256(maxF));
 
-    // Convert BPS to hundredths-of-a-basis-point (1 bps = 100 h-bps) for hook fee
-    uint24 hookFee = uint24(uint256(feeBps) * 100);
+        return uint16(uint256(fee));
+    }
 
-    // No custom delta adjustments
-    BeforeSwapDelta zeroDelta = BeforeSwapDeltaLibrary.ZERO_DELTA;
+    // -------------------------
+    // BaseHook overrides
+    // -------------------------
 
-    return (IHooks.beforeSwap.selector, zeroDelta, hookFee);
-  }
+    /// @inheritdoc BaseHook
+    function getHookPermissions() public pure override returns (Hooks.Permissions memory p) {
+        // Enable only the callbacks we actually use.
+        p.beforeSwap = true;
+        p.afterSwap  = true;
+        // All other flags remain false by default.
+    }
 
-  /// @notice Called by PoolManager after a swap is executed. Emits the policy used for observability.
-  function afterSwap(
-    address,
-    PoolKey calldata,
-    IPoolManager.SwapParams calldata,
-    BalanceDelta,
-    bytes calldata
-  ) external returns (bytes4) {
-    uint16 feeBps = currentFeeBps();
-    emit PolicyUsed(feeBps, _bucketHeuristic());
-    return IHooks.afterSwap.selector;
-  }
+    /// @inheritdoc BaseHook
+    function _beforeSwap(
+        address,               // sender
+        PoolKey calldata,      // key
+        SwapParams calldata,   // params
+        bytes calldata         // hookData
+    )
+        internal
+        override
+        returns (bytes4, BeforeSwapDelta, uint24)
+    {
+        // No pre-delta changes for this POC.
+        BeforeSwapDelta delta = BeforeSwapDeltaLibrary.ZERO_DELTA;
+
+        // Convert bps (1e-4) -> v4 fee units (1e-6).
+        uint256 feeUx6 = uint256(currentFeeBps()) * 100;
+        if (feeUx6 > 1_000_000) feeUx6 = 1_000_000; // safety cap at 100%
+
+        return (BaseHook.beforeSwap.selector, delta, uint24(feeUx6));
+    }
+
+    /// @inheritdoc BaseHook
+    function _afterSwap(
+        address,               // sender
+        PoolKey calldata,      // key
+        SwapParams calldata,   // params
+        BalanceDelta,          // delta (result)
+        bytes calldata         // hookData
+    )
+        internal
+        override
+        returns (bytes4, int128)
+    {
+        emit PolicyUsed(currentFeeBps(), _bucketHeuristic());
+        // No unspecified-currency delta return.
+        return (BaseHook.afterSwap.selector, 0);
+    }
 }
-
-
