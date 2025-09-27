@@ -57,25 +57,10 @@ const AdaptiveFeeHookAbi = [
 ] as const
 
 const PolicyControllerAbi = [
-  {
-    type: 'function',
-    name: 'getPolicy',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [
-      {
-        name: '',
-        type: 'tuple',
-        components: [
-          { name: 'baseFeeBps', type: 'uint16' },
-          { name: 'maxFeeBps', type: 'uint16' },
-          { name: 'cooldownSec', type: 'uint32' },
-          { name: 'lastUpdated', type: 'uint40' },
-          { name: 'volSlopeBpsPerBucket', type: 'int16' },
-        ],
-      },
-    ],
-  },
+  // view getters available on our PolicyController
+  { type: 'function', name: 'baseFeeBps', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint16' }] },
+  { type: 'function', name: 'maxFeeBps', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'uint16' }] },
+  { type: 'function', name: 'volSlopeBpsPerBucket', stateMutability: 'view', inputs: [], outputs: [{ name: '', type: 'int16' }] },
   {
     type: 'function',
     name: 'setPolicy',
@@ -85,11 +70,12 @@ const PolicyControllerAbi = [
         name: 'p',
         type: 'tuple',
         components: [
+          // Order must match Policy struct in contract: base, max, volSlope, cooldown, lastUpdated
           { name: 'baseFeeBps', type: 'uint16' },
           { name: 'maxFeeBps', type: 'uint16' },
+          { name: 'volSlopeBpsPerBucket', type: 'int16' },
           { name: 'cooldownSec', type: 'uint32' },
           { name: 'lastUpdated', type: 'uint40' },
-          { name: 'volSlopeBpsPerBucket', type: 'int16' },
         ],
       },
     ],
@@ -215,21 +201,15 @@ export async function updatePolicy(params: UpdatePolicyParams = {}) {
   const account = privateKeyToAccount(pk as `0x${string}`)
   const wallet = createWalletClient({ account, transport: http(RPC_URL) })
 
-  // Read current policy
-  const current = (await publicClient.readContract({
-    address: addresses.policyController,
-    abi: PolicyControllerAbi,
-    functionName: 'getPolicy',
-    args: [],
-  })) as unknown as {
-    baseFeeBps: number
-    maxFeeBps: number
-    cooldownSec: number
-    lastUpdated: number
-    volSlopeBpsPerBucket: number
-  }
+  // Read current parts (contract does not expose getPolicy in this build)
+  const [base, max, slope] = await Promise.all([
+    publicClient.readContract({ address: addresses.policyController, abi: PolicyControllerAbi, functionName: 'baseFeeBps', args: [] }) as Promise<number>,
+    publicClient.readContract({ address: addresses.policyController, abi: PolicyControllerAbi, functionName: 'maxFeeBps', args: [] }) as Promise<number>,
+    publicClient.readContract({ address: addresses.policyController, abi: PolicyControllerAbi, functionName: 'volSlopeBpsPerBucket', args: [] }) as Promise<number>,
+  ])
 
-  const nextBase = Math.min(current.baseFeeBps + bump, current.maxFeeBps)
+  const nextBase = Math.min(base + bump, max)
+  const cooldownSec = 30 // keep same as demo deploy
 
   const hash = await wallet.writeContract({
     address: addresses.policyController,
@@ -237,11 +217,12 @@ export async function updatePolicy(params: UpdatePolicyParams = {}) {
     functionName: 'setPolicy',
     args: [
       {
+        // Order must be base, max, slope, cooldown, lastUpdated
         baseFeeBps: BigInt(nextBase),
-        maxFeeBps: BigInt(current.maxFeeBps),
-        cooldownSec: BigInt(current.cooldownSec),
-        lastUpdated: 0n, // contract overwrites with block.timestamp
-        volSlopeBpsPerBucket: BigInt(current.volSlopeBpsPerBucket),
+        maxFeeBps: BigInt(max),
+        volSlopeBpsPerBucket: BigInt(slope),
+        cooldownSec: BigInt(cooldownSec),
+        lastUpdated: 0n,
       },
     ],
     account,
