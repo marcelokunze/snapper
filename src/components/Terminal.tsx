@@ -15,6 +15,7 @@ type TerminalEntry = {
   message: string
   raw?: unknown
   isResult?: boolean
+  withLogo?: boolean
 }
 
 export type TerminalHandle = {
@@ -104,6 +105,17 @@ const Terminal = forwardRef<TerminalHandle, Props>(function Terminal(
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [entries.length])
 
+  // Seed a welcome entry once if empty, treated like a normal message
+  useEffect(() => {
+    setEntries((prev) => {
+      if (prev.length > 0) return prev
+      const welcome = `SNAPPER v1 — AI-native Uniswap v4 Hook playground\nThis demo shows programmable swap fees using a Uniswap v4 Hook.\nEach swap calls our Hook, which computes a dynamic fee from a policy, then emits PolicyUsed(feeBps, bucket) so you can see the decision live here in the terminal.\n\nWhat you can do:\n• Simulate: compare baseline vs dynamic fee.\n• Swap: we auto-check approvals → build real calldata → send tx.\n• Update Policy: change base/max/slope, then swap again to see a different fee/output.\n\nRecommended flow: Simulate → (auto) Approvals → Build Tx → Send → watch PolicyUsed.\nNetwork: Localhost (31337). Use Faucet for TOKEN0/TOKEN1 if needed.\nTip: If Anvil restarts, redeploy contracts, restart backend, and refresh this page.\n\nReady when you are—pick a tool above or hit Swap to see the Hook in action.`
+      return [
+        { ts: Date.now(), emoji: '', message: welcome, withLogo: true },
+      ]
+    })
+  }, [])
+
   const containerStyle = useMemo<React.CSSProperties>(() => ({
     height: typeof height === 'number' ? `${height}px` : height,
   }), [height])
@@ -115,7 +127,7 @@ const Terminal = forwardRef<TerminalHandle, Props>(function Terminal(
         style={{
           ...containerStyle,
           border: 'none',
-          borderRadius: 4,
+          borderRadius: 6,
           padding: 12,
           overflowY: 'auto',
           fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
@@ -129,19 +141,24 @@ const Terminal = forwardRef<TerminalHandle, Props>(function Terminal(
             <span style={{ wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>{e.message}</span>
           )
           return (
-            <div key={`${e.ts}-${i}`} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 6 }}>
-              <span style={{ opacity: 0.7, paddingTop: 2, minWidth: 60 }}>{formatTime(e.ts)}</span>
-              <span style={{ opacity: 0.7, paddingTop: 2 }}>&gt;</span>
-              <span style={{ width: 22 }}>{e.emoji}</span>
-              <div style={{ flex: 1 }}>
-                {e.isResult ? (
-                  <div className="bg-zinc-700 rounded p-2">
-                    <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.85, marginBottom: 4 }}>RESULT</div>
-                    {content}
-                  </div>
-                ) : (
-                  content
-                )}
+            <div key={`${e.ts}-${i}`} style={{ marginBottom: e.withLogo ? 20 : 6 }}>
+              {e.withLogo && (
+                <img src="/SNAPPER-logo.svg" alt="SNAPPER" style={{ width: '100%', height: 'auto', marginBottom: 16, opacity: 0.2 }} />
+              )}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <span style={{ opacity: 0.7, paddingTop: 2, minWidth: 60 }}>{formatTime(e.ts)}</span>
+                <span style={{ opacity: 0.7, paddingTop: 2 }}>&gt;</span>
+                <span style={{ width: 22 }}>{e.emoji}</span>
+                <div style={{ flex: 1 }}>
+                  {e.isResult ? (
+                    <div className="bg-zinc-700 rounded p-2">
+                      <div style={{ fontSize: 11, fontWeight: 600, opacity: 0.85, marginBottom: 4 }}>RESULT</div>
+                      {content}
+                    </div>
+                  ) : (
+                    content
+                  )}
+                </div>
               </div>
             </div>
           )

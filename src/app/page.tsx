@@ -130,6 +130,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen w-full px-6 py-6">
+      <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <Image src="/SNAPPER-logo.svg" alt="SNAPPER" width={200} height={32} />
@@ -140,8 +141,8 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="mb-4">
-        <div className="font-mono text-md text-zinc-200 mb-2">TOOLS</div>
+      <div className="mb-8 mt-8">
+        <div className="font-mono text-md font-semibold tracking-widest text-zinc-500/80 mb-2">TOOLS</div>
         <div className="flex items-center gap-3">
           <ToolcallButton onClick={onApproveToken0}>Approve TOKEN0</ToolcallButton>
           <ToolcallButton onClick={onSimulateSwap}>Simulate Swap</ToolcallButton>
@@ -166,9 +167,11 @@ export default function Home() {
       )}
 
       {/* MCPay modal removed */}
-
+      </div>
       <div className="fixed left-0 right-0 bottom-0 px-6 pb-6">
-        <Terminal ref={termRef} height="70vh" />
+        <div className="max-w-6xl mx-auto">
+          <Terminal ref={termRef} height="70vh" />
+        </div>
       </div>
     </div>
   );
